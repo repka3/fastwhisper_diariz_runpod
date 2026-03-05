@@ -1,0 +1,129 @@
+import os
+import subprocess
+import tempfile
+import uuid
+
+import requests
+import runpod
+import torch
+from faster_whisper import WhisperModel
+from pyannote.audio import Pipeline
+
+# Models loaded once per worker — warm invocations skip this
+print("Loading Whisper large-v3...")
+whisper = WhisperModel("large-v3", device="cuda", compute_type="float16")
+
+print("Loading pyannote speaker-diarization-3.1...")
+diarizer = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
+diarizer.to(torch.device("cuda"))
+
+print("Models ready.")
+
+
+def get_speaker(start, end, diarization):
+    best, best_dur = "UNKNOWN", 0
+    for turn, _, speaker in diarization.itertracks(yield_label=True):
+        overlap = min(end, turn.end) - max(start, turn.start)
+        if overlap > best_dur:
+            best, best_dur = speaker, overlap
+    return best
+
+
+def handler(job):
+    inp = job["input"]
+
+    audio_url = inp["audio_url"]
+    language = inp.get("language", None)
+    beam_size = inp.get("beam_size", 5)
+    vad_filter = inp.get("vad_filter", True)
+    min_speakers = inp.get("min_speakers", None)
+    max_speakers = inp.get("max_speakers", None)
+    num_speakers = inp.get("num_speakers", None)
+
+    job_id = str(uuid.uuid4())[:8]
+    input_path = f"/tmp/{job_id}_input"
+    wav_path = f"/tmp/{job_id}.wav"
+
+    try:
+        # Download audio
+        response = requests.get(audio_url, stream=True, timeout=300)
+        response.raise_for_status()
+        with open(input_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=65536):
+                f.write(chunk)
+
+        # Convert to 16kHz mono WAV
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", input_path, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav_path],
+            check=True,
+            capture_output=True,
+        )
+
+        # Transcribe
+        segments, info = whisper.transcribe(
+            wav_path,
+            beam_size=beam_size,
+            language=language,
+            vad_filter=vad_filter,
+            word_timestamps=True,
+            condition_on_previous_text=False,
+        )
+        segments = list(segments)
+
+        # Diarize
+        diarize_kwargs = {}
+        if num_speakers:
+            diarize_kwargs["num_speakers"] = num_speakers
+        else:
+            if min_speakers:
+                diarize_kwargs["min_speakers"] = min_speakers
+            if max_speakers:
+                diarize_kwargs["max_speakers"] = max_speakers
+
+        diarization = diarizer(wav_path, **diarize_kwargs)
+
+        # Merge transcription + diarization
+        all_speakers = set()
+        out_segments = []
+
+        for seg in segments:
+            seg_speaker = get_speaker(seg.start, seg.end, diarization)
+            all_speakers.add(seg_speaker)
+
+            words = []
+            for w in (seg.words or []):
+                w_speaker = get_speaker(w.start, w.end, diarization)
+                all_speakers.add(w_speaker)
+                words.append({
+                    "word": w.word,
+                    "start": round(w.start, 3),
+                    "end": round(w.end, 3),
+                    "speaker": w_speaker,
+                })
+
+            out_segments.append({
+                "start": round(seg.start, 3),
+                "end": round(seg.end, 3),
+                "speaker": seg_speaker,
+                "text": seg.text.strip(),
+                "words": words,
+            })
+
+        real_speakers = sorted(s for s in all_speakers if s != "UNKNOWN")
+
+        return {
+            "language": info.language,
+            "duration": round(info.duration, 3),
+            "num_speakers": len(real_speakers),
+            "speakers": real_speakers,
+            "segments": out_segments,
+        }
+
+    finally:
+        if os.path.exists(input_path):
+            os.unlink(input_path)
+        if os.path.exists(wav_path):
+            os.unlink(wav_path)
+
+
+runpod.serverless.start({"handler": handler})
