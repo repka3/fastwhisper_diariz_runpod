@@ -53,6 +53,54 @@ One step at a time. A step only gets written here after it's been validated live
 
 ---
 
+## ONE-SHOT SETUP (after SSHing into a fresh pod)
+
+**Step 1 — install all dependencies:**
+
+```bash
+pip install faster-whisper "pyannote.audio<4.0" "huggingface_hub<0.20" hf_transfer
+```
+
+**Step 2 — download test audio and run the full pipeline:**
+
+```bash
+wget -q -O /tmp/test.wav "https://github.com/ggerganov/whisper.cpp/raw/master/samples/jfk.wav" && python -c "
+import torch
+from faster_whisper import WhisperModel
+from pyannote.audio import Pipeline
+
+whisper = WhisperModel('large-v3', device='cuda', compute_type='float16')
+diarizer = Pipeline.from_pretrained('pyannote/speaker-diarization-3.1')
+diarizer.to(torch.device('cuda'))
+
+audio_file = '/tmp/test.wav'
+segments, info = whisper.transcribe(audio_file, beam_size=5)
+segments = list(segments)
+diarization = diarizer(audio_file)
+
+def get_speaker(start, end, diarization):
+    best, best_dur = 'UNKNOWN', 0
+    for turn, _, speaker in diarization.itertracks(yield_label=True):
+        overlap = min(end, turn.end) - max(start, turn.start)
+        if overlap > best_dur:
+            best, best_dur = speaker, overlap
+    return best
+
+for seg in segments:
+    speaker = get_speaker(seg.start, seg.end, diarization)
+    print(f'[{seg.start:.1f}s -> {seg.end:.1f}s] {speaker}: {seg.text.strip()}')
+"
+```
+
+Expected output:
+```
+[0.0s -> 10.4s] SPEAKER_00: And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.
+```
+
+Prerequisites: `HF_TOKEN`, `HF_HOME`, `HF_HUB_ENABLE_HF_TRANSFER` must be set in the pod template (see STEP 0).
+
+---
+
 ## STEP 0 — Create the pod (validated)
 
 **Custom template** in RunPod (not a pre-built one — need full port control).
@@ -67,6 +115,14 @@ One step at a time. A step only gets written here after it's been validated live
 | Volume mount path | `/workspace` |
 | Expose TCP | 22 (SSH) |
 | Expose HTTP | 8000 (for later) |
+
+Environment variables to set in the RunPod template:
+
+| Variable | Value |
+|---|---|
+| `HF_TOKEN` | `hf_your_token_here` |
+| `HF_HOME` | `/workspace/hf_cache` |
+| `HF_HUB_ENABLE_HF_TRANSFER` | `1` |
 
 SSH key: use Ed25519 key added in RunPod account settings.
 
