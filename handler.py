@@ -36,6 +36,7 @@ def handler(job):
     language = inp.get("language", None)
     beam_size = inp.get("beam_size", 5)
     vad_filter = inp.get("vad_filter", True)
+    initial_prompt = inp.get("initial_prompt", None)
     min_speakers = inp.get("min_speakers", None)
     max_speakers = inp.get("max_speakers", None)
     num_speakers = inp.get("num_speakers", None)
@@ -67,6 +68,7 @@ def handler(job):
             vad_filter=vad_filter,
             word_timestamps=True,
             condition_on_previous_text=False,
+            initial_prompt=initial_prompt,
         )
         segments = list(segments)
 

@@ -12,5 +12,5 @@ curl -s \
   -H "Authorization: Bearer $RUNPOD_API_KEY" \
   -H "Content-Type: application/json" \
   -d "{\"input\": {\"audio_url\": \"$JFK_URL\"}}" \
-  "https://api.runpod.io/v2/$RUNPOD_ENDPOINT_ID/runsync" \
+  "https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync" \
 | jq .
