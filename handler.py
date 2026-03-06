@@ -20,6 +20,13 @@ diarizer.to(torch.device("cuda"))
 print("Models ready.")
 
 
+def format_hhmmss(seconds):
+    total_seconds = max(0, int(round(seconds)))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
 def get_speaker(start, end, diarization):
     best, best_dur = "UNKNOWN", 0
     for turn, _, speaker in diarization.itertracks(yield_label=True):
@@ -126,15 +133,15 @@ def handler(job):
         t_ff = t_ffmpeg_done - t_ffmpeg
         t_w = t_whisper_done - t_whisper
         t_d = t_diarize_done - t_diarize
-        rtf = t_total / info.duration if info.duration else 0
+        speed = info.duration / t_total if t_total else 0
 
         print(
-            f"[stats] audio={info.duration:.1f}s | "
-            f"ffmpeg={t_ff:.1f}s | "
-            f"whisper={t_w:.1f}s | "
-            f"diarize={t_d:.1f}s | "
-            f"total={t_total:.1f}s | "
-            f"RTF={rtf:.2f}x"
+            f"[stats] audio={format_hhmmss(info.duration)} | "
+            f"ffmpeg={format_hhmmss(t_ff)} | "
+            f"whisper={format_hhmmss(t_w)} | "
+            f"diarize={format_hhmmss(t_d)} | "
+            f"total={format_hhmmss(t_total)} | "
+            f"speed={speed:.2f}x realtime"
         )
 
         return {
