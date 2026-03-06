@@ -26,6 +26,7 @@ Designed for long-form audio (meetings, interviews).
     "language":       "en",
     "beam_size":      5,
     "vad_filter":     true,
+    "condition_on_previous_text": false,
     "initial_prompt": null,
     "min_speakers":   null,
     "max_speakers":   null,
@@ -42,6 +43,7 @@ Designed for long-form audio (meetings, interviews).
 | `language` | string \| null | `null` | ISO 639-1 code (`"en"`, `"it"`, etc.). `null` = auto-detect |
 | `beam_size` | int | `5` | Whisper beam size. Lower = faster, slightly less accurate |
 | `vad_filter` | bool | `true` | Filter non-speech segments before transcription. Reduces hallucinations |
+| `condition_on_previous_text` | bool | `false` | Keep Whisper text continuity across segments. `false` reduces repeated carry-over; `true` can help preserve context |
 | `initial_prompt` | string \| null | `null` | Domain-specific context for Whisper (jargon, acronyms, names). E.g. `"EBITDA, KPI, Salesforce"` |
 | `min_speakers` | int \| null | `null` | Minimum expected speakers. Set if known — improves diarization accuracy |
 | `max_speakers` | int \| null | `null` | Maximum expected speakers. Set if known |
