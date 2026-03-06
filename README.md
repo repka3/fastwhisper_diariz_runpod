@@ -127,22 +127,14 @@ All input is converted to 16kHz mono WAV before processing.
 
 ## Deployment
 
-### Environment variables (set in RunPod serverless endpoint config)
-
-| Variable | Value |
-|---|---|
-| `HF_TOKEN` | your HuggingFace token |
-| `HF_HOME` | `/runpod-volume/hf_cache` (if using network volume) or omit |
-| `HF_HUB_ENABLE_HF_TRANSFER` | `1` |
-
 ### Build and push
 
+Models are baked into the image at build time — no network access needed at runtime.
+`HF_TOKEN` is passed as a build arg (never stored in the image layer):
+
 ```bash
-docker build -t your-registry/fastwhisper-diariz:latest .
+docker build --build-arg HF_TOKEN=hf_xxx -t your-registry/fastwhisper-diariz:latest .
 docker push your-registry/fastwhisper-diariz:latest
 ```
 
-### Cold start note
-
-Models are downloaded from HuggingFace on first cold start (~3.1 GB total).
-Use a RunPod network volume with `HF_HOME` pointing to it to cache across cold starts.
+`HF_HUB_ENABLE_HF_TRANSFER=1` is set inside the Dockerfile so fast downloads are active during the build. No action needed from you.
