@@ -1,7 +1,5 @@
 FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
-ARG HF_TOKEN
-
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -12,7 +10,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Download models at build time so cold starts don't need network access
 ENV HF_HOME=/app/hf_cache
 ENV HF_HUB_ENABLE_HF_TRANSFER=1
-RUN HF_TOKEN=$HF_TOKEN python -c "\
+RUN --mount=type=secret,id=HF_TOKEN \
+    HF_TOKEN=$(cat /run/secrets/HF_TOKEN) python -c "\
 from faster_whisper import WhisperModel; \
 WhisperModel('large-v3', device='cpu', compute_type='int8'); \
 from pyannote.audio import Pipeline; \

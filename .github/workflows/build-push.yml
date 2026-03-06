@@ -19,7 +19,7 @@ jobs:
           dotnet: true
           haskell: true
           docker-images: true
-          tool-cache: true
+          tools-cache: true
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -38,7 +38,7 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/fastwhisper-diariz:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/fastwhisper-diariz:${{ github.sha }}
-          build-args: |
+          secrets: |
             HF_TOKEN=${{ secrets.HF_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
