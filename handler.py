@@ -1,6 +1,6 @@
 import os
 import subprocess
-import tempfile
+import time
 import uuid
 
 import requests
@@ -46,6 +46,8 @@ def handler(job):
     wav_path = f"/tmp/{job_id}.wav"
 
     try:
+        t_start = time.time()
+
         # Download audio
         response = requests.get(audio_url, stream=True, timeout=300)
         response.raise_for_status()
@@ -54,13 +56,16 @@ def handler(job):
                 f.write(chunk)
 
         # Convert to 16kHz mono WAV
+        t_ffmpeg = time.time()
         subprocess.run(
             ["ffmpeg", "-y", "-i", input_path, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav_path],
             check=True,
             capture_output=True,
         )
+        t_ffmpeg_done = time.time()
 
         # Transcribe
+        t_whisper = time.time()
         segments, info = whisper.transcribe(
             wav_path,
             beam_size=beam_size,
@@ -71,6 +76,7 @@ def handler(job):
             initial_prompt=initial_prompt,
         )
         segments = list(segments)
+        t_whisper_done = time.time()
 
         # Diarize
         diarize_kwargs = {}
@@ -82,7 +88,9 @@ def handler(job):
             if max_speakers:
                 diarize_kwargs["max_speakers"] = max_speakers
 
+        t_diarize = time.time()
         diarization = diarizer(wav_path, **diarize_kwargs)
+        t_diarize_done = time.time()
 
         # Merge transcription + diarization
         all_speakers = set()
@@ -112,6 +120,21 @@ def handler(job):
             })
 
         real_speakers = sorted(s for s in all_speakers if s != "UNKNOWN")
+
+        t_total = time.time() - t_start
+        t_ff = t_ffmpeg_done - t_ffmpeg
+        t_w = t_whisper_done - t_whisper
+        t_d = t_diarize_done - t_diarize
+        rtf = t_total / info.duration if info.duration else 0
+
+        print(
+            f"[stats] audio={info.duration:.1f}s | "
+            f"ffmpeg={t_ff:.1f}s | "
+            f"whisper={t_w:.1f}s | "
+            f"diarize={t_d:.1f}s | "
+            f"total={t_total:.1f}s | "
+            f"RTF={rtf:.2f}x"
+        )
 
         return {
             "language": info.language,
