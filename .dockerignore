@@ -2,3 +2,5 @@
 *.md
 .gitignore
 .dockerignore
+.env
+*.sh
