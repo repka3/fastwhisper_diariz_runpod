@@ -35,7 +35,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/fastwhisper-diariz:latest
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/fastwhisper-diariz:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/fastwhisper-diariz:${{ github.sha }}
           build-args: |
             HF_TOKEN=${{ secrets.HF_TOKEN }}
           cache-from: type=gha
